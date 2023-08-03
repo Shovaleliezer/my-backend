@@ -1,6 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const Item = require("../models/item");
+require("dotenv").config();
+// Middleware to validate code in JSON request
+function validateCode(req, res, next) {
+  const { code } = req.body;
+  const expectedCode = process.env.CODE; // Replace this with your actual expected code
+
+  if (code !== expectedCode) {
+    return res.status(401).json({ message: "Invalid code" });
+  }
+
+  next();
+}
 
 // GET all items
 // GET all items sorted by date (newest first)
@@ -42,7 +54,7 @@ router.get("/:id", getItem, (req, res) => {
 });
 
 // POST create new item
-router.post("/", async (req, res) => {
+router.post("/", validateCode, async (req, res) => {
   const item = new Item({
     title: req.body.title,
     description: req.body.description,
@@ -59,7 +71,7 @@ router.post("/", async (req, res) => {
   }
 });
 // DELETE all items
-router.delete("/", async (req, res) => {
+router.delete("/",validateCode, async (req, res) => {
     try {
       await Item.deleteMany({});
       res.json({ message: "All items deleted" });
@@ -68,17 +80,21 @@ router.delete("/", async (req, res) => {
     }
   });
 // DELETE specific item by ID
-router.delete("/:id", getItem, async (req, res) => {
+router.delete("/:id", validateCode, async (req, res) => {
   try {
-    await res.item.remove();
+    const deletedItem = await Item.findByIdAndRemove(req.params.id);
+    if (!deletedItem) {
+      return res.status(404).json({ message: "Item not found" });
+    }
     res.json({ message: "Item deleted" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Error deleting item", error: err.message });
   }
 });
 
+
 // PUT edit specific item by ID
-router.put("/:id", getItem, async (req, res) => {
+router.put("/:id",validateCode, getItem, async (req, res) => {
   if (req.body.title != null) {
     res.item.title = req.body.title;
   }
@@ -107,14 +123,15 @@ router.put("/:id", getItem, async (req, res) => {
 async function getItem(req, res, next) {
   try {
     const item = await Item.findById(req.params.id);
-    if (item == null) {
+    if (!item) {
       return res.status(404).json({ message: "Item not found" });
     }
     res.item = item;
     next();
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: "Error fetching item", error: err.message });
   }
 }
+
 
 module.exports = router;
